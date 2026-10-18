@@ -14,6 +14,16 @@
 #   block_internet = TRUE points the proxy settings at a dead address, so
 #   download.file(), url(), curl and httr fail. A speed bump, not a wall.
 sandbox_start <- function(wd = getwd(), block_internet = TRUE) {
+  # user_profile = FALSE: don't run a .Rprofile. The sandbox gets the same
+  # package library as your session.
+  options <- callr::r_session_options(env = sandbox_env(block_internet), user_profile = FALSE)
+  session <- callr::r_session$new(options = options, wait = TRUE)
+  session$run(setwd, list(wd))
+  session
+}
+
+# Environment variables for any R process the agent's code runs in.
+sandbox_env <- function(block_internet = TRUE) {
   env <- callr::rcmd_safe_env()
   if (block_internet) {
     dead_proxy <- "http://127.0.0.1:9"
@@ -28,12 +38,39 @@ sandbox_start <- function(wd = getwd(), block_internet = TRUE) {
       NO_PROXY = ""
     )
   }
-  # user_profile = FALSE: don't run a .Rprofile. The sandbox gets the same
-  # package library as your session.
-  options <- callr::r_session_options(env = env, user_profile = FALSE)
-  session <- callr::r_session$new(options = options, wait = TRUE)
-  session$run(setwd, list(wd))
-  session
+  env
+}
+
+# Run a script file in a FRESH R process, like `Rscript script.R`, with the
+# same settings as the sandbox. Nothing from the persistent session is
+# visible to it, and nothing it makes is kept. Returns the text the LLM sees.
+sandbox_script <- function(path, wd = getwd(), block_internet = TRUE, timeout = 60) {
+  result <- tryCatch(
+    callr::rscript(
+      path,
+      wd = wd,
+      env = sandbox_env(block_internet),
+      user_profile = FALSE,
+      timeout = timeout,
+      stderr = "2>&1",
+      show = FALSE,
+      fail_on_status = FALSE
+    ),
+    callr_timeout_error = function(e) NULL
+  )
+  # With fail_on_status = FALSE a timeout is reported, not raised
+  if (is.null(result) || isTRUE(result$timeout)) {
+    return(paste0("Error: script took longer than ", timeout, " seconds and was stopped."))
+  }
+
+  text <- trimws(result$stdout)
+  if (result$status != 0) {
+    text <- paste0(text, if (nzchar(text)) "\n", "Error: script exited with status ", result$status)
+  }
+  if (!nzchar(text)) {
+    text <- "(script ran, no output)"
+  }
+  text
 }
 
 # This function is sent to the sandbox and runs THERE, not here.

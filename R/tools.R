@@ -1,6 +1,6 @@
 # tools.R
 # ---------------------------------------------------------------------------
-# The five default tools, plus the optional vision tool.
+# The six default tools, plus the optional vision tool.
 #
 # Each tool is made with ellmer::tool(), the same way you'd make your own.
 # They share a small environment, `ctx`, that holds the project folder, the
@@ -85,6 +85,24 @@ make_default_tools <- function(ctx) {
     )
   )
 
+  run_r_script <- ellmer::tool(
+    function(path) {
+      path <- check_path(path, ctx$wd)
+      if (!file.exists(path) || dir.exists(path)) stop("File not found: ", path)
+      result <- sandbox_script(path, ctx$wd, ctx$block_internet, timeout = ctx$timeout)
+      clip_chars(result, ctx$max_result_chars)
+    },
+    name = "run_r_script",
+    description = paste(
+      "Run an R script from the project in a fresh R session, like `Rscript script.R`.",
+      "Use this (not system2 or Rscript) to run a pipeline from a clean start.",
+      "Objects it makes are not kept; save results to files."
+    ),
+    arguments = list(
+      path = ellmer::type_string("Path to the script, relative to the working folder.")
+    )
+  )
+
   task_complete <- ellmer::tool(
     function(summary) {
       ctx$summary <- summary
@@ -98,7 +116,7 @@ make_default_tools <- function(ctx) {
     )
   )
 
-  list(read_file, write_file, edit_file, run_r_code, task_complete)
+  list(read_file, write_file, edit_file, run_r_code, run_r_script, task_complete)
 }
 
 # Vision: the agent can ask a vision model about an image file.

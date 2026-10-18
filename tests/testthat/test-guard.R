@@ -35,3 +35,15 @@ test_that("source() of a project file is judged by the file's contents", {
   expect_flag(guard_check("run_r_code", list(code = "f <- 'add.R'; source(f)"), wd), "another file")
   expect_flag(guard_check("run_r_code", list(code = "source('missing.R')"), wd), "another file")
 })
+
+test_that("run_r_script is judged by the script's contents", {
+  wd <- withr::local_tempdir()
+  writeLines("x <- mean(1:10)", file.path(wd, "ok.R"))
+  writeLines("system2('Rscript', 'other.R')", file.path(wd, "bad.R"))
+  writeLines("source('bad.R')", file.path(wd, "wrapper.R"))
+
+  expect_length(guard_check("run_r_script", list(path = "ok.R"), wd), 0)
+  expect_flag(guard_check("run_r_script", list(path = "bad.R"), wd), "shell command")
+  expect_flag(guard_check("run_r_script", list(path = "wrapper.R"), wd), "shell command")
+  expect_length(guard_check("run_r_script", list(path = "missing.R"), wd), 0)
+})

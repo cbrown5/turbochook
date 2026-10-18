@@ -38,3 +38,21 @@ test_that("internet is blocked by default", {
   )
   expect_match(out, "Error")
 })
+
+test_that("scripts run in a fresh process in the project folder", {
+  wd <- withr::local_tempdir()
+  writeLines(c("x <- 41", "cat(x + 1, getwd(), sep = '\\n')"), file.path(wd, "ok.R"))
+  writeLines(c("cat('before\\n')", "stop('boom')"), file.path(wd, "bad.R"))
+  writeLines("Sys.sleep(10)", file.path(wd, "slow.R"))
+
+  out <- turbochook:::sandbox_script(file.path(wd, "ok.R"), wd)
+  expect_match(out, "42")
+  expect_match(out, basename(wd), fixed = TRUE)
+
+  out <- turbochook:::sandbox_script(file.path(wd, "bad.R"), wd)
+  expect_match(out, "before")
+  expect_match(out, "boom")
+  expect_match(out, "exited with status")
+
+  expect_match(turbochook:::sandbox_script(file.path(wd, "slow.R"), wd, timeout = 1), "longer than")
+})

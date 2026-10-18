@@ -32,7 +32,7 @@
 #' @param max_tool_calls Most tool calls before stopping.
 #' @param guard Scan code for risky calls and ask before running it.
 #' @param block_internet Point the sandbox's proxy settings at a dead address.
-#' @param timeout Seconds before a `run_r_code` call is stopped.
+#' @param timeout Seconds before a `run_r_code` or `run_r_script` call is stopped.
 #' @param max_result_chars Tool results longer than this are cut short.
 #' @param max_retries Retries when the API is rate limited.
 #' @param wd The project folder. The agent can only touch files in here.

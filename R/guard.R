@@ -67,6 +67,14 @@ guard_check <- function(name, arguments, wd = getwd()) {
   if (name == "run_r_code") {
     return(scan_code(inline_sourced_files(arguments$code, wd)))
   }
+  if (name == "run_r_script") {
+    # Judge the script by its contents. A bad path is left to the tool,
+    # which refuses it.
+    full <- tryCatch(check_path(arguments$path, wd), error = function(e) NULL)
+    if (is.null(full) || !file.exists(full) || dir.exists(full)) return(character())
+    code <- paste(readLines(full, warn = FALSE), collapse = "\n")
+    return(scan_code(inline_sourced_files(code, wd)))
+  }
   if (name %in% c("write_file", "edit_file")) {
     text <- arguments$path
     if (grepl("\\.(R|r|Rmd|qmd|sh|py|bat|ps1)$|^\\.R(profile|environ)", basename(text))) {

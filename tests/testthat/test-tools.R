@@ -42,3 +42,12 @@ test_that("task_complete records the summary", {
   expect_true(ctx$done)
   expect_equal(ctx$summary, "All done")
 })
+
+test_that("run_r_script runs a project script and refuses other paths", {
+  wd <- withr::local_tempdir()
+  writeLines("cat('hi from script')", file.path(wd, "s.R"))
+  tools <- turbochook:::make_default_tools(make_ctx(wd))
+  expect_match(call_tool(tools, "run_r_script", path = "s.R"), "hi from script")
+  expect_error(call_tool(tools, "run_r_script", path = "nope.R"), "not found")
+  expect_error(call_tool(tools, "run_r_script", path = "../s.R"), "not allowed")
+})

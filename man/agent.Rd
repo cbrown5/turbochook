@@ -39,7 +39,7 @@ ellmer chat object to use as the vision model.}
 
 \item{block_internet}{Point the sandbox's proxy settings at a dead address.}
 
-\item{timeout}{Seconds before a `run_r_code` call is stopped.}
+\item{timeout}{Seconds before a `run_r_code` or `run_r_script` call is stopped.}
 
 \item{max_result_chars}{Tool results longer than this are cut short.}
 

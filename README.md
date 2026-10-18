@@ -22,7 +22,7 @@ API calls go through the `ellmer` package, so any provider and model ellmer supp
 
 ## Features
 
-- **Five default tools**: `read_file`, `write_file`, `edit_file`, `run_r_code` and `task_complete`. Add your own with `ellmer::tool()`.
+- **Six default tools**: `read_file`, `write_file`, `edit_file`, `run_r_code`, `run_r_script` (runs a project script in a fresh R process, like `Rscript`) and `task_complete`. Add your own with `ellmer::tool()`.
 - **Light system prompt.** It adds the project's `AGENTS.md` if there is one.
 - **Skills, loaded only when needed.** Skills in a `skills/` folder are listed by name and description; the agent reads the full skill when the task needs it.
 - **Optional vision tool.** The agent can ask a vision model about an image, e.g. to check a plot it made.
@@ -75,7 +75,7 @@ agent("...", max_steps = 30, max_tool_calls = 60, timeout = 60, max_result_chars
 
 - `max_steps`: most LLM replies.
 - `max_tool_calls`: most tool calls (`task_complete` is always allowed, so the agent can sum up).
-- `timeout`: seconds before a `run_r_code` call is stopped.
+- `timeout`: seconds before a `run_r_code` or `run_r_script` call is stopped.
 - `max_result_chars`: long tool results are cut short before going to the LLM.
 
 ### Add your own tools
@@ -158,7 +158,7 @@ So Turbo Chook adds three layers on top.
 
 ### 1. The guard (a fast grep, then ask you)
 
-Before `run_r_code`, `write_file` or `edit_file` runs, the code is scanned with a list of regexes (`R/guard.R`, try `turbochook::scan_code("...")`). It looks for:
+Before `run_r_code`, `run_r_script`, `write_file` or `edit_file` runs, the code is scanned with a list of regexes (`R/guard.R`, try `turbochook::scan_code("...")`). It looks for:
 
 - shell commands and other processes: `system`, `system2`, `shell`, `processx::`, `callr::`, `Rscript`
 - deleting, moving or copying files: `unlink`, `file.remove`, `file.rename`, `fs::file_delete`, `rm -r`
@@ -167,6 +167,8 @@ Before `run_r_code`, `write_file` or `edit_file` runs, the code is scanned with 
 - `source()` of anything other than a plain-string path to a project file. For `source("R/add.R")` the guard scans the contents of `R/add.R` instead of flagging it.
 - changes to R itself: `install.packages`, `.libPaths`, `R_LIBS`, `system.file`, anything mentioning `turbochook`, `Sys.setenv`, `setwd`, `.Rprofile`, `.Renviron`
 - paths that leave the project: `../`, `~/`, `normalizePath`
+
+`run_r_script` is judged by the script's contents (and any project files it `source()`s), so the agent never needs `system2("Rscript", ...)`.
 
 Files written with `write_file`/`edit_file` are scanned by path, and by content if they're code files (`.R`, `.Rmd`, `.qmd`, `.sh`, `.py`, ...), since a script can be sourced later.
 
@@ -202,7 +204,7 @@ The guard is a tripwire, not a proof. A regex can't fully understand R: a determ
 | File | What it does |
 |---|---|
 | `R/agent.R` | `agent()`: setup, the hooks and the loop |
-| `R/tools.R` | the five default tools, the vision tool, path checks |
+| `R/tools.R` | the six default tools, the vision tool, path checks |
 | `R/sandbox.R` | starts the callr session and runs code in it |
 | `R/guard.R` | the danger scan and the y/n prompt |
 | `R/prompt.R` | system prompt, AGENTS.md, skills directory |
