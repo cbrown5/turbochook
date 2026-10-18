@@ -6,7 +6,7 @@
 # there in the next, just like typing into the console.
 #
 # This keeps the agent's code away from YOUR R session (your objects, your
-# loaded packages, and the turbochook guard). It is NOT a security wall. The
+# loaded packages). It is NOT a security wall. The
 # child process runs as you, so it can still touch your files. See README.md.
 # ---------------------------------------------------------------------------
 

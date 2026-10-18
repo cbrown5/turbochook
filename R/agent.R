@@ -11,8 +11,7 @@
 # ellmer does steps 1-3 for us when tools are registered: chat$chat() keeps
 # going round until the LLM replies without a tool call. We watch each lap
 # with two hooks:
-#   on_tool_request - just before a tool runs: print it, check limits,
-#                     run the guard
+#   on_tool_request - just before a tool runs: print it, check limits
 #   on_tool_result  - just after it runs: print the result, stop if the
 #                     tool was task_complete
 # To stop, a hook signals a "turbochook_stop" condition, which drops us out
@@ -30,7 +29,6 @@
 #'   ellmer chat object to use as the vision model.
 #' @param max_steps Most LLM replies before stopping.
 #' @param max_tool_calls Most tool calls before stopping.
-#' @param guard Scan code for risky calls and ask before running it.
 #' @param block_internet Point the sandbox's proxy settings at a dead address.
 #' @param timeout Seconds before a `run_r_code` or `run_r_script` call is stopped.
 #' @param max_result_chars Tool results longer than this are cut short.
@@ -45,7 +43,6 @@ agent <- function(task,
                   vision = FALSE,
                   max_steps = 30,
                   max_tool_calls = 60,
-                  guard = TRUE,
                   block_internet = TRUE,
                   timeout = 60,
                   max_result_chars = 5000,
@@ -116,15 +113,6 @@ agent <- function(task,
 
     show_tool_call(request@name, request@arguments)
 
-    if (guard) {
-      reasons <- guard_check(request@name, request@arguments, ctx$wd)
-      if (length(reasons) > 0 && !guard_ask(request@name, reasons)) {
-        ellmer::tool_reject(paste(
-          "The user blocked this call because it looked risky:",
-          paste(reasons, collapse = "; ")
-        ))
-      }
-    }
     tool_calls <<- tool_calls + 1
   })
 

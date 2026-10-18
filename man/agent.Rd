@@ -11,7 +11,6 @@ agent(
   vision = FALSE,
   max_steps = 30,
   max_tool_calls = 60,
-  guard = TRUE,
   block_internet = TRUE,
   timeout = 60,
   max_result_chars = 5000,
@@ -35,7 +34,6 @@ ellmer chat object to use as the vision model.}
 
 \item{max_tool_calls}{Most tool calls before stopping.}
 
-\item{guard}{Scan code for risky calls and ask before running it.}
 
 \item{block_internet}{Point the sandbox's proxy settings at a dead address.}
 

@@ -27,7 +27,6 @@ API calls go through the `ellmer` package, so any provider and model ellmer supp
 - **Skills, loaded only when needed.** Skills in a `skills/` folder are listed by name and description; the agent reads the full skill when the task needs it.
 - **Optional vision tool.** The agent can ask a vision model about an image, e.g. to check a plot it made.
 - **Sandbox instead of approval.** The agent's R code runs in a separate `callr::r_session()`, with a timeout and a soft internet block.
-- **Danger guard.** Risky code (shell commands, deleting files, internet access, hidden `eval()` code, changes to the R library) is flagged before it runs, and you're asked y/n.
 - **Clear terminal output** with `cli`:
   - a header rule for each step, with tokens, cost and tool calls so far
   - the agent's text wrapped, with bold and code in colour
@@ -92,7 +91,7 @@ count_rows <- ellmer::tool(
 agent("How many rows are in data.csv?", tools = list(count_rows))
 ```
 
-Your tools run in your R session, not the sandbox, and the guard doesn't check them.
+Your tools run in your R session, not the sandbox.
 
 ### Vision
 
@@ -142,7 +141,7 @@ Short answer: **callr gives isolation, not security.**
 
 - keeping your R session clean (the agent can't overwrite your objects or crash your session),
 - timeouts (a runaway loop is stopped after `timeout` seconds),
-- keeping the guard out of reach (see below).
+- keeping the agent's code away from your session's loaded packages.
 
 But the child process runs **as you**, with all your permissions. So yes, to your questions:
 
@@ -154,43 +153,19 @@ But the child process runs **as you**, with all your permissions. So yes, to you
 | `source()` a script it just wrote? | Yes |
 | use the internet (`url()`, `download.file()`, httr)? | Yes |
 
-So Turbo Chook adds three layers on top.
+So Turbo Chook adds two small layers on top. For real isolation, use Docker (see the limits below).
 
-### 1. The guard (a fast grep, then ask you)
+### 1. Internet speed bump
 
-Before `run_r_code`, `run_r_script`, `write_file` or `edit_file` runs, the code is scanned with a list of regexes (`R/guard.R`, try `turbochook::scan_code("...")`). It looks for:
+The sandbox starts with `http_proxy`/`https_proxy` pointed at a dead address (`127.0.0.1:9`). `download.file()`, `url()`, curl, httr and httr2 all honour these, so downloads fail. Code that ignores proxies (raw sockets, or `system("curl --noproxy ...")`) gets past it. Allow internet with `block_internet = FALSE`.
 
-- shell commands and other processes: `system`, `system2`, `shell`, `processx::`, `callr::`, `Rscript`
-- deleting, moving or copying files: `unlink`, `file.remove`, `file.rename`, `fs::file_delete`, `rm -r`
-- the internet: `url(`, `download.file`, sockets, `curl::`, `httr`, web addresses
-- **indirect code**: `eval`, `parse`, `str2lang`, `do.call`, `match.fun`, `get`, `.Internal`, `.Call`, and decoding tricks like `base64`, `rawToChar`, `intToUtf8`. If the agent tries to hide a call, the hiding gets flagged.
-- `source()` of anything other than a plain-string path to a project file. For `source("R/add.R")` the guard scans the contents of `R/add.R` instead of flagging it.
-- changes to R itself: `install.packages`, `.libPaths`, `R_LIBS`, `system.file`, anything mentioning `turbochook`, `Sys.setenv`, `setwd`, `.Rprofile`, `.Renviron`
-- paths that leave the project: `../`, `~/`, `normalizePath`
-
-`run_r_script` is judged by the script's contents (and any project files it `source()`s), so the agent never needs `system2("Rscript", ...)`.
-
-Files written with `write_file`/`edit_file` are scanned by path, and by content if they're code files (`.R`, `.Rmd`, `.qmd`, `.sh`, `.py`, ...), since a script can be sourced later.
-
-If anything matches, the agent pauses, you see what was found and why, and you answer y/n. If you say no, the agent is told the call was blocked and why. **In a non-interactive session (e.g. `Rscript`, or a Ralph loop left running), risky calls are blocked automatically.** Turn the guard off with `guard = FALSE`.
-
-**Why the agent can't edit the guard.** The guard runs in *your* R process, from the installed package already loaded in memory. The agent's code runs in a different process. Also:
-
-- the file tools refuse any path outside the project folder, and any path inside `.libPaths()`. Those checks also run in your process.
-- code that mentions the R library, `.libPaths`, `system.file` or `turbochook` is flagged.
-- even if a file in the installed package was changed, the copy already loaded in your session isn't affected until you reload it.
-
-### 2. Internet speed bump
-
-The sandbox starts with `http_proxy`/`https_proxy` pointed at a dead address (`127.0.0.1:9`). `download.file()`, `url()`, curl, httr and httr2 all honour these, so downloads fail. Code that ignores proxies (raw sockets, or `system("curl --noproxy ...")`) gets past it, but those calls are flagged by the guard. Allow internet with `block_internet = FALSE`.
-
-### 3. Path checks on file tools
+### 2. Path checks on file tools
 
 `read_file`, `write_file` and `edit_file` only work inside the project folder. `..` is refused and symlinks are resolved.
 
 ### The honest limits
 
-The guard is a tripwire, not a proof. A regex can't fully understand R: a determined model could still find a pattern we didn't list. It catches the common and the obvious, and makes hiding things noisy. For real isolation, run the agent where it can't hurt anything:
+The callr sandbox and the proxy block are speed bumps, not walls. For real isolation, run the agent where it can't hurt anything:
 
 - **Docker**: run R in a container with only the project folder mounted (e.g. the `rocker/r-ver` image), with `--network none` if you don't need the internet.
 - **A separate user account or VM** with no access to your files.
@@ -206,12 +181,11 @@ The guard is a tripwire, not a proof. A regex can't fully understand R: a determ
 | `R/agent.R` | `agent()`: setup, the hooks and the loop |
 | `R/tools.R` | the six default tools, the vision tool, path checks |
 | `R/sandbox.R` | starts the callr session and runs code in it |
-| `R/guard.R` | the danger scan and the y/n prompt |
 | `R/prompt.R` | system prompt, AGENTS.md, skills directory |
 | `R/display.R` | everything printed to the screen |
 | `R/retry.R` | rate limit retries with backoff |
 | `R/ralph.R` | the Ralph Loop |
 
-**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. Rather than rebuild that, `agent()` hooks in with `chat$on_tool_request()` (print the call, check limits, run the guard) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
+**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. Rather than rebuild that, `agent()` hooks in with `chat$on_tool_request()` (print the call, check limits) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
 
 Run the tests with `devtools::test()`. They don't call any API.

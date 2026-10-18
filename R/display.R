@@ -77,12 +77,6 @@ clip_lines <- function(text, n) {
   paste(lines, collapse = "\n")
 }
 
-show_warning <- function(tool_name, reasons) {
-  cat("\n")
-  cli::cli_alert_warning("Guard: the {.field {tool_name}} call looks risky")
-  for (reason in reasons) cli::cli_bullets(c("!" = cli::format_inline("{reason}")))
-}
-
 # Final summary in a box.
 show_summary <- function(summary, stats, status) {
   width <- min(cli::console_width(), 80) - 6
