@@ -1,0 +1,21 @@
+Package: turbochook
+Title: A Simple LLM Agent Written in R
+Version: 0.1.0
+Authors@R: person("CJ", "Brown", email = "christo.j.brown@gmail.com", role = c("aut", "cre"))
+Description: A small, transparent LLM coding agent. The agent thinks, calls
+    tools, observes the results and repeats until it calls task_complete.
+    Built on 'ellmer'. R code runs in a separate 'callr' session.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1)
+Imports:
+    callr,
+    cli,
+    ellmer (>= 0.4.0),
+    stats,
+    utils
+Suggests:
+    testthat (>= 3.0.0),
+    withr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
