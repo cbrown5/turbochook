@@ -35,6 +35,7 @@ API calls go through the `ellmer` package, so any provider and model ellmer supp
   - a boxed final summary
 - **Cost control**: step and tool call limits, and a retry with exponential backoff when the API is rate limited.
 - **Ralph Loop**: `ralph()` runs fresh agents on the same prompt, again and again, until the job is done.
+- **A simpler sibling for teaching**: `handfish()` is the same loop with four tools, no sandbox, and manual approval of every tool call.
 
 ---
 
@@ -162,6 +163,78 @@ Every API call is retried when the error looks like a rate limit (`429`, `Too Ma
 
 ---
 
+# Handfish: a smaller agent to learn on
+
+`handfish()` is the same idea as `turbochook()` with fewer moving parts, for
+teaching and for when you want to watch every move.
+
+```r
+turbochook::handfish("Make a file called hello.R that prints 'hi', then run it.")
+```
+
+**It asks before it does anything.** Every tool call is printed and then waits
+for you:
+
+```
+→ run_r_code
+source("hello.R")
+  Run this run_r_code call? [y/N]
+```
+
+Only `y` (or `yes`) runs it. Anything else, including a stray keypress or
+Enter, is a no. When you decline, the agent is told it was refused and asks
+you what to do instead, rather than quietly trying again.
+
+`task_complete` is the one tool that isn't gated; it only ends the session.
+
+### What it drops, and what it gains
+
+| | `turbochook()` | `handfish()` |
+|---|---|---|
+| Tools | 6 | 4: `read_file`, `write_file`, `run_r_code`, `task_complete` |
+| Where code runs | a separate `callr` session | **your R session** |
+| Safety | sandbox, no approval | **approval, no sandbox** |
+| Vision, skills, retries, `run_r_script` | yes | no |
+
+The trade is deliberate. `turbochook()` keeps the agent at arm's length so it
+can work unattended; `handfish()` lets it into your session but makes you sign
+off on every step. Read each call before you accept it: `run_r_code` runs in
+your own session, so it can do anything you can. It does run in its own
+environment, so it won't overwrite your objects, and the file tools are still
+held to the project folder.
+
+### Running it unattended
+
+The console prompt needs an interactive session. Pass your own `approve`
+function to decide in code, which is also how the tests drive it:
+
+```r
+# approve everything
+handfish("...", approve = function(name, args) TRUE)
+
+# approve reads, refuse everything else
+handfish("...", approve = function(name, args) name == "read_file")
+```
+
+It takes the tool's name and a list of its arguments, and returns `TRUE` to
+let the call run.
+
+### The loop
+
+The same THINK → ACT → OBSERVE as `turbochook()`, with a step in front:
+
+1. **THINK**: the LLM replies with text and, optionally, tool calls.
+2. **ASK**: show you the call and wait.
+3. **ACT**: run it, if you said yes.
+4. **OBSERVE**: send the result back.
+
+Approval sits inside the tools rather than in a hook. A hook can watch a tool
+call but can't stop one; a tool can. Declining calls `stop()`, and ellmer
+hands that to the LLM as the tool's result, so a refusal is just another
+observation to the agent.
+
+---
+
 # The sandbox: how safe is it?
 
 Short answer: **callr gives isolation, not security.**
@@ -208,6 +281,7 @@ The callr sandbox and the proxy block are speed bumps, not walls. For real isola
 | File | What it does |
 |---|---|
 | `R/agent.R` | `turbochook()`: setup, the hooks and the loop |
+| `R/handfish.R` | `handfish()`: the smaller teaching agent, and its tools |
 | `R/tools.R` | the six default tools, the vision tool, path checks |
 | `R/sandbox.R` | starts the callr session and runs code in it |
 | `R/prompt.R` | system prompt, AGENTS.md, skills directory |

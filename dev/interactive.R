@@ -25,3 +25,13 @@ dir.create(wd, showWarnings = FALSE)
 debugonce(turbochook)
 
 turbochook(task)
+
+
+# ---- 2. Handfish: the smaller agent -------------------------------------
+# Same loop, four tools, and it asks before every call. Runs in THIS R
+# session, so watch what you approve.
+
+handfish("Make a file called hello.R that prints 'hi', then run it.", wd = wd)
+
+# To step through it without answering prompts, approve everything:
+handfish("...", wd = wd, approve = function(name, args) TRUE)
