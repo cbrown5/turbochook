@@ -3,6 +3,7 @@
 A simple, transparent LLM coding agent written in R. Inspired by the Pi agent and the Ralph Loop.
 
 CJ Brown, 2026-10-23
+Code written by Claude Code
 
 ```r
 turbochook::turbochook("Load data.csv, plot cover against distance and save it as plot.png")
@@ -48,6 +49,7 @@ devtools::install("path/to/turbochook")
 ```
 
 You need an API key for your provider, e.g. `ANTHROPIC_API_KEY` in `~/.Renviron`.
+Easiest way to add this is to run `usethis::edit_r_environ()` and add the API key. 
 
 ## Run the agent
 
@@ -139,7 +141,7 @@ head(turbochook::fish_coral_cover_sites)
 ?turbochook::fish_coral_cover_sites        # the variables, and where they came from
 ```
 
-`glm-readme.md` is the brief that goes with it: the aims, the modelling approach (negative binomial GLM, model selection by likelihood ratio test), the workflow, and the shape of the report to write. It is a file rather than a data object because the agent reads it off disk with its own `read_file` tool, the same as any other project file.
+`glm-readme.md` is the brief that goes with it: the aims, the modelling approach (negative binomial GLM, model selection by likelihood ratio test), the workflow, and the shape of the report to write. Set it up to test your agent by copying the files to the local directory: 
 
 ```r
 # copy the brief and the data into a folder, laid out the way the brief expects
@@ -155,8 +157,6 @@ turbochook::ralph("Read glm-readme.md and do the analysis it asks for.",
                   wd = wd, max_loops = 10, max_cost = 5)
 ```
 
-The brief is left as it was actually written, warts and all. One worth knowing about: it calls the branching coral column `CB_cover`, but in the data it is `cb_cover`. A capable agent notices and carries on, which makes it a fairer test than a brief tidied up in advance.
-
 ## Rate limits
 
 Every API call is retried when the error looks like a rate limit (`429`, `Too Many Requests`, `rate limit`, `throttle`, plus Anthropic's `overloaded`/`529`). The waits are 2s, 4s, 8s, 16s, ... plus some random jitter, for up to `max_retries` (default 5) tries. If a rate limit hits partway through a step, the agent is told the last tool results may be lost and asked to check where it's up to. You can use `with_retry()` in your own code too.
@@ -165,8 +165,7 @@ Every API call is retried when the error looks like a rate limit (`429`, `Too Ma
 
 # Handfish: a smaller agent to learn on
 
-`handfish()` is the same idea as `turbochook()` with fewer moving parts, for
-teaching and for when you want to watch every move.
+`handfish()` is the same idea as `turbochook()` with fewer tools and that requires manual approval of every step: 
 
 ```r
 turbochook::handfish("Make a file called hello.R that prints 'hi', then run it.")
@@ -196,9 +195,7 @@ you what to do instead, rather than quietly trying again.
 | Safety | sandbox, no approval | **approval, no sandbox** |
 | Vision, skills, retries, `run_r_script` | yes | no |
 
-The trade is deliberate. `turbochook()` keeps the agent at arm's length so it
-can work unattended; `handfish()` lets it into your session but makes you sign
-off on every step. Read each call before you accept it: `run_r_code` runs in
+`turbochook()` keeps the agent at arm's length so it can work unattended; `handfish()` lets it into your session but makes you signoff on every step. Read each call before you accept it: `run_r_code` runs in
 your own session, so it can do anything you can. It does run in its own
 environment, so it won't overwrite your objects, and the file tools are still
 held to the project folder.
@@ -228,16 +225,13 @@ The same THINK → ACT → OBSERVE as `turbochook()`, with a step in front:
 3. **ACT**: run it, if you said yes.
 4. **OBSERVE**: send the result back.
 
-Approval sits inside the tools rather than in a hook. A hook can watch a tool
-call but can't stop one; a tool can. Declining calls `stop()`, and ellmer
-hands that to the LLM as the tool's result, so a refusal is just another
-observation to the agent.
+ Declining calls `stop()`, and ellmer hands that to the LLM as the tool's result, so a refusal is observed by the agent.
 
 ---
 
-# The sandbox: how safe is it?
+# The sandbox isolates your R environment but is not secure 
 
-Short answer: **callr gives isolation, not security.**
+The sandbox uses `callr`. **callr gives isolation, not security.**
 
 `callr::r_session()` starts a second R process. The agent's `run_r_code` calls run there, in a session that persists (objects stay between calls, like the console). That's good for:
 
@@ -245,11 +239,11 @@ Short answer: **callr gives isolation, not security.**
 - timeouts (a runaway loop is stopped after `timeout` seconds),
 - keeping the agent's code away from your session's loaded packages.
 
-But the child process runs **as you**, with all your permissions. So yes, to your questions:
+But the child process runs **as you**, with all your permissions. So:
 
 | Can the agent's code... | With callr alone |
 |---|---|
-| delete files (`unlink()`, `file.remove()`)? | Yes. (`rm()` only removes R objects, which is harmless.) |
+| delete files (`unlink()`, `file.remove()`)? | Yes.  |
 | run shell commands (`system()`, `system2()`, `Rscript`)? | Yes |
 | hide code in `eval(parse(text = ...))`, `do.call()`, `get()`? | Yes |
 | `source()` a script it just wrote? | Yes |
@@ -265,7 +259,7 @@ The sandbox starts with `http_proxy`/`https_proxy` pointed at a dead address (`1
 
 `read_file`, `write_file` and `edit_file` only work inside the project folder. `..` is refused and symlinks are resolved.
 
-### The honest limits
+### The limits
 
 The callr sandbox and the proxy block are speed bumps, not walls. For real isolation, run the agent where it can't hurt anything:
 
@@ -289,6 +283,6 @@ The callr sandbox and the proxy block are speed bumps, not walls. For real isola
 | `R/retry.R` | rate limit retries with backoff |
 | `R/ralph.R` | the Ralph Loop |
 
-**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. Rather than rebuild that, `turbochook()` hooks in with `chat$on_tool_request()` (print the call, check limits) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
+**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. `turbochook()` hooks in with `chat$on_tool_request()` (print the call, check limits) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
 
 Run the tests with `devtools::test()`. They don't call any API.

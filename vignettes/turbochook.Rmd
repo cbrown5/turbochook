@@ -1,0 +1,261 @@
+---
+title: "Getting started with Turbo Chook"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with Turbo Chook}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+Turbo Chook is a small, transparent LLM coding agent written in R. This
+vignette walks through: the loop, then `handfish()` (the teaching version, where you approve every step), then
+the full agent and the Ralph Loop.
+
+## The loop
+
+Every agent here runs the same three steps:
+
+1. **THINK**: send a message to the LLM. It replies with text and, optionally,
+   one or more tool calls.
+2. **ACT**: run the tool(s) in R.
+3. **OBSERVE**: send the tools' results back to the LLM.
+
+... and repeat until the LLM calls `task_complete`.
+
+API calls go through the `ellmer` package, so any provider and model ellmer
+supports will work.
+
+## Before you start
+
+```{r}
+devtools::install_github("cbrown5/turbochook")
+```
+
+You need an API key for your provider, e.g. `ANTHROPIC_API_KEY` in
+`~/.Renviron`. The easiest way to add it is `usethis::edit_r_environ()`.
+
+## Start with handfish
+
+`handfish()` is the same loop with four tools. It is for learning
+
+```{r}
+turbochook::handfish("Make a file called hello.R that prints 'hi', then run it.")
+```
+
+**It asks before it does anything.** Every tool call is printed, then waits:
+
+```
+→ run_r_code
+source("hello.R")
+  Run this run_r_code call? [y/N]
+```
+
+Only `y` (or `yes`) runs it. Anything else, including a stray keypress or
+Enter, is a no. When you decline, the agent is told it was refused and asks you
+what to do instead. `task_complete` is the one tool that isn't gated; it only ends the session.
+
+Its loop has an extra step in front of `turbochook()`'s:
+
+1. **THINK**: the LLM replies with text and, optionally, tool calls.
+2. **ASK**: show you the call and wait.
+3. **ACT**: run it, if you said yes.
+4. **OBSERVE**: send the result back.
+
+### Try it on the example data
+
+The package has a real analysis to try an agent on.
+`fish_coral_cover_sites` is reef survey data from 49 sites in the Solomon
+Islands: counts of juvenile bumphead parrotfish ('topa') and benthic cover
+measured at the same places. Cover is a count of survey points, so divide by
+`n_pts` for per cent cover.
+
+```{r}
+head(turbochook::fish_coral_cover_sites)
+?turbochook::fish_coral_cover_sites        # the variables, and where they came from
+```
+
+`glm-readme.md` is the brief that goes with it: the aims, the modelling
+approach (negative binomial GLM, model selection by likelihood ratio test), the
+workflow, and the shape of the report to write. `glm_example_setup()` copies
+the brief and the data into a folder, laid out the way the brief expects.
+
+```{r}
+wd <- turbochook::glm_example_setup()
+list.files(wd, recursive = TRUE)
+#> "data/fish-coral-cover-sites.csv" "glm-readme.md"
+```
+
+Pointing `handfish()` at a piece of it is a good way to watch the loop work,
+one approved call at a time:
+
+```{r}
+turbochook::handfish(
+  "Read glm-readme.md, then read the data and describe what is in it.",
+  wd = wd
+)
+```
+
+### Running it unattended
+
+!! Be careful, can cause damage to your computer, such as delete files !! 
+
+The console prompt needs an interactive session. Pass your own `approve`
+function to decide in code:
+
+```{r}
+# approve everything
+handfish("...", approve = function(name, args) TRUE)
+
+# approve reads, refuse everything else
+handfish("...", approve = function(name, args) name == "read_file")
+```
+
+It takes the tool's name and a list of its arguments, and returns `TRUE` to let
+the call run.
+
+### How handfish and turbochook functions compare
+
+| | `turbochook()` | `handfish()` |
+|---|---|---|
+| Tools | 6 | 4: `read_file`, `write_file`, `run_r_code`, `task_complete` |
+| Where code runs | a separate `callr` session | **your R session** |
+| Safety | sandbox, no approval | **approval, no sandbox** |
+| Vision, skills, retries, `run_r_script` | yes | no |
+
+`turbochook()` keeps the agent at arm's length so it can work unattended;
+`handfish()` lets it into your session but makes you sign off on every step.
+Read each call before you accept it: `run_r_code` runs in your own session, so
+it can do anything you can.
+
+## The full agent
+
+```{r}
+turbochook::turbochook("Load data.csv, plot cover against distance and save it as plot.png")
+```
+
+The agent works in the current folder (or `wd = "some/folder"`). It returns
+(invisibly) a list with the `summary`, `status`, `steps`, `tool_calls`,
+`tokens`, `cost` and the `chat`, so you can keep talking to it.
+
+It has six tools: `read_file`, `write_file`, `edit_file`, `run_r_code`,
+`run_r_script` (runs a project script in a fresh R process, like `Rscript`) and
+`task_complete`.
+
+### Pick your provider and model
+
+Pass any ellmer chat object. A copy is used, so your object isn't changed.
+
+```{r}
+turbochook("...", chat = ellmer::chat_anthropic(model = "claude-haiku-5-5"))
+turbochook("...", chat = ellmer::chat_openrouter(model = "qwen/qwen3.8-27b"))
+turbochook("...", chat = ellmer::chat_ollama(model = "llama3.3"))
+```
+
+### Limits, to manage costs
+
+```{r}
+turbochook("...", max_steps = 30, max_tool_calls = 60, timeout = 60, max_result_chars = 5000)
+```
+
+- `max_steps`: most LLM replies.
+- `max_tool_calls`: most tool calls (`task_complete` is always allowed, so the
+  agent can sum up).
+- `timeout`: seconds before a `run_r_code` or `run_r_script` call is stopped.
+- `max_result_chars`: long tool results are cut short before going to the LLM.
+
+### Add your own tools
+
+Make them with `ellmer::tool()` and pass them in a list. They run in your R
+session, not the sandbox.
+
+```{r}
+count_rows <- ellmer::tool(
+  function(path) nrow(read.csv(path)),
+  name = "count_rows",
+  description = "Count the rows in a csv file.",
+  arguments = list(path = ellmer::type_string("Path to the csv file."))
+)
+turbochook("How many rows are in data.csv?", tools = list(count_rows))
+```
+
+### Vision
+
+```{r}
+turbochook("Make a plot of the data, then check it looks right", vision = TRUE)
+turbochook("...", vision = ellmer::chat_openai(model = "gpt-5"))  # any vision model
+```
+
+This adds a `look_at_image(path, question)` tool. It sends the image to a
+separate vision chat (Claude Sonnet 5.5 by default). Its tokens and cost are
+added to the totals.
+
+### AGENTS.md and skills
+
+- If the folder has an `AGENTS.md`, it is added to the system prompt.
+- Skills go in `skills/<name>/SKILL.md` or `skills/<name>.md`. Only each
+  skill's name, description (from a `description:` line in the YAML header, or
+  the first line) and path go in the system prompt. The agent reads the full
+  file with `read_file` when it needs it.
+
+### The sandbox
+
+The agent's `run_r_code` calls run in a separate `callr::r_session()`, with a
+timeout and a soft internet block (proxies pointed at a dead address), and the
+file tools are held to the project folder. **callr gives isolation, not
+security** — the child process runs as you, with all your permissions, so it
+can still delete files or shell out. For real isolation run the agent in
+Docker, a separate user account or VM, or under `sandbox-exec` / `bubblewrap`,
+and keep the project under git.
+
+### Rate limits
+
+Every API call is retried when the error looks like a rate limit (`429`,
+`Too Many Requests`, `rate limit`, `throttle`, plus Anthropic's
+`overloaded`/`529`). The waits are 2s, 4s, 8s, 16s, ... plus some jitter, for
+up to `max_retries` (default 5) tries. You can use `with_retry()` in your own
+code too.
+
+## The Ralph Loop
+
+The example analysis is a long job for one context, so it suits the Ralph Loop:
+fresh agents on the same prompt, again and again, until the job is done.
+
+```{r}
+turbochook::ralph("Read glm-readme.md and do the analysis it asks for.",
+                  wd = wd, max_loops = 10, max_cost = 5)
+```
+
+Each loop is a fresh `turbochook()` run (a clean context) with the same prompt.
+The agents pass notes to each other in `PROGRESS.md`. The loop stops when an
+agent writes a `RALPH_DONE` file (only allowed once the whole task is checked),
+or at `max_loops` / `max_cost`. The done signal is a file, not a word in the
+summary, because models write things like "not RALPH_DONE yet".
+
+Other arguments are passed on to `turbochook()`:
+
+```{r}
+turbochook::ralph(
+  "Write R functions for each analysis in plan.md, with tests.",
+  max_loops = 10,
+  max_cost = 2,                       # dollars, if ellmer knows the price
+  chat = ellmer::chat_anthropic(model = "claude-haiku-5-5"),
+  max_steps = 20                      # passed on to turbochook()
+)
+```
+
+## Where to look next
+
+| File | What it does |
+|---|---|
+| `R/agent.R` | `turbochook()`: setup, the hooks and the loop |
+| `R/handfish.R` | `handfish()`: the smaller teaching agent, and its tools |
+| `R/tools.R` | the six default tools, the vision tool, path checks |
+| `R/sandbox.R` | starts the callr session and runs code in it |
+| `R/prompt.R` | system prompt, AGENTS.md, skills directory |
+| `R/display.R` | everything printed to the screen |
+| `R/retry.R` | rate limit retries with backoff |
+| `R/ralph.R` | the Ralph Loop |
