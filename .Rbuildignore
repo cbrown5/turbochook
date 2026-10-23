@@ -4,3 +4,4 @@
 ^skills$
 ^\.DS_Store$
 ^dev$
+^data-raw$

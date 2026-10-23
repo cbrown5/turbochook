@@ -2,10 +2,10 @@
 
 A simple, transparent LLM coding agent written in R. Inspired by the Pi agent and the Ralph Loop.
 
-CJ Brown, 2026-10-18
+CJ Brown, 2026-10-23
 
 ```r
-turbochook::agent("Load data.csv, plot cover against distance and save it as plot.png")
+turbochook::turbochook("Load data.csv, plot cover against distance and save it as plot.png")
 ```
 
 ## How it works
@@ -51,7 +51,7 @@ You need an API key for your provider, e.g. `ANTHROPIC_API_KEY` in `~/.Renviron`
 ## Run the agent
 
 ```r
-turbochook::agent("Load data.csv, plot cover against distance and save it as plot.png")
+turbochook::turbochook("Load data.csv, plot cover against distance and save it as plot.png")
 ```
 
 The agent works in the current folder (or `wd = "some/folder"`). It returns (invisibly) a list with the `summary`, `status`, `steps`, `tool_calls`, `tokens`, `cost` and the `chat`, so you can keep talking to it.
@@ -61,15 +61,15 @@ The agent works in the current folder (or `wd = "some/folder"`). It returns (inv
 Pass any ellmer chat object. A copy is used, so your object isn't changed.
 
 ```r
-agent("...", chat = ellmer::chat_anthropic(model = "claude-haiku-5-5"))
-agent("...", chat = ellmer::chat_openrouter(model = "qwen/qwen3.8-27b"))
-agent("...", chat = ellmer::chat_ollama(model = "llama3.3"))
+turbochook("...", chat = ellmer::chat_anthropic(model = "claude-haiku-5-5"))
+turbochook("...", chat = ellmer::chat_openrouter(model = "qwen/qwen3.8-27b"))
+turbochook("...", chat = ellmer::chat_ollama(model = "llama3.3"))
 ```
 
 ### Limits (to manage costs)
 
 ```r
-agent("...", max_steps = 30, max_tool_calls = 60, timeout = 60, max_result_chars = 5000)
+turbochook("...", max_steps = 30, max_tool_calls = 60, timeout = 60, max_result_chars = 5000)
 ```
 
 - `max_steps`: most LLM replies.
@@ -88,7 +88,7 @@ count_rows <- ellmer::tool(
   description = "Count the rows in a csv file.",
   arguments = list(path = ellmer::type_string("Path to the csv file."))
 )
-agent("How many rows are in data.csv?", tools = list(count_rows))
+turbochook("How many rows are in data.csv?", tools = list(count_rows))
 ```
 
 Your tools run in your R session, not the sandbox.
@@ -96,8 +96,8 @@ Your tools run in your R session, not the sandbox.
 ### Vision
 
 ```r
-agent("Make a plot of the data, then check it looks right", vision = TRUE)
-agent("...", vision = ellmer::chat_openai(model = "gpt-5"))  # any vision model
+turbochook("Make a plot of the data, then check it looks right", vision = TRUE)
+turbochook("...", vision = ellmer::chat_openai(model = "gpt-5"))  # any vision model
 ```
 
 This adds a `look_at_image(path, question)` tool. It sends the image to a separate vision chat (Claude Sonnet 5.5 by default). Its tokens and cost are added to the totals.
@@ -121,11 +121,40 @@ turbochook::ralph(
   max_loops = 10,
   max_cost = 2,                       # dollars, if ellmer knows the price
   chat = ellmer::chat_anthropic(model = "claude-haiku-5-5"),
-  max_steps = 20                      # passed on to agent()
+  max_steps = 20                      # passed on to turbochook()
 )
 ```
 
-Each loop is a fresh `agent()` run (a clean context) with the same prompt. The agents pass notes to each other in `PROGRESS.md`. The loop stops when an agent writes a `RALPH_DONE` file (only allowed once the whole task is checked), or at `max_loops` / `max_cost`. The done signal is a file, not a word in the summary, because models write things like "not RALPH_DONE yet".
+Each loop is a fresh `turbochook()` run (a clean context) with the same prompt. The agents pass notes to each other in `PROGRESS.md`. The loop stops when an agent writes a `RALPH_DONE` file (only allowed once the whole task is checked), or at `max_loops` / `max_cost`. The done signal is a file, not a word in the summary, because models write things like "not RALPH_DONE yet".
+
+## Example data
+
+The package ships a real analysis to try the agent on, rather than a toy one.
+
+`fish_coral_cover_sites` is reef survey data from 49 sites in the Solomon Islands: counts of juvenile bumphead parrotfish ('topa') and benthic cover measured at the same places. Cover is a count of survey points, so divide by `n_pts` for per cent cover.
+
+```r
+head(turbochook::fish_coral_cover_sites)
+?turbochook::fish_coral_cover_sites        # the variables, and where they came from
+```
+
+`glm-readme.md` is the brief that goes with it: the aims, the modelling approach (negative binomial GLM, model selection by likelihood ratio test), the workflow, and the shape of the report to write. It is a file rather than a data object because the agent reads it off disk with its own `read_file` tool, the same as any other project file.
+
+```r
+# copy the brief and the data into a folder, laid out the way the brief expects
+wd <- turbochook::glm_example_setup()
+
+turbochook::turbochook("Read glm-readme.md and do the analysis it asks for.", wd = wd)
+```
+
+It is a long job for one context, so it suits the Ralph Loop:
+
+```r
+turbochook::ralph("Read glm-readme.md and do the analysis it asks for.",
+                  wd = wd, max_loops = 10, max_cost = 5)
+```
+
+The brief is left as it was actually written, warts and all. One worth knowing about: it calls the branching coral column `CB_cover`, but in the data it is `cb_cover`. A capable agent notices and carries on, which makes it a fairer test than a brief tidied up in advance.
 
 ## Rate limits
 
@@ -178,7 +207,7 @@ The callr sandbox and the proxy block are speed bumps, not walls. For real isola
 
 | File | What it does |
 |---|---|
-| `R/agent.R` | `agent()`: setup, the hooks and the loop |
+| `R/agent.R` | `turbochook()`: setup, the hooks and the loop |
 | `R/tools.R` | the six default tools, the vision tool, path checks |
 | `R/sandbox.R` | starts the callr session and runs code in it |
 | `R/prompt.R` | system prompt, AGENTS.md, skills directory |
@@ -186,6 +215,6 @@ The callr sandbox and the proxy block are speed bumps, not walls. For real isola
 | `R/retry.R` | rate limit retries with backoff |
 | `R/ralph.R` | the Ralph Loop |
 
-**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. Rather than rebuild that, `agent()` hooks in with `chat$on_tool_request()` (print the call, check limits) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
+**How the loop works.** ellmer already runs THINK → ACT → OBSERVE once tools are registered: `chat$chat()` keeps going round until the LLM replies without a tool call. Rather than rebuild that, `turbochook()` hooks in with `chat$on_tool_request()` (print the call, check limits) and `chat$on_tool_result()` (print the result, stop if it was `task_complete`). To stop, a hook signals a `turbochook_stop` condition, which drops out of `chat$chat()`. If the LLM replies with text and no tool call, the outer `repeat` loop shows the text and nudges it to carry on, until it calls `task_complete` or hits a limit.
 
 Run the tests with `devtools::test()`. They don't call any API.

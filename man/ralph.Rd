@@ -26,7 +26,7 @@ Only works for models where ellmer knows the price.}
 \item{done_file}{The file the agent makes when the whole task is done.
 It is deleted before the first loop.}
 
-\item{...}{Passed on to [agent()], e.g. `chat`, `max_steps`, `max_tool_calls`.}
+\item{...}{Passed on to [turbochook()], e.g. `chat`, `max_steps`, `max_tool_calls`.}
 }
 \value{
 Invisibly, a list of the results from each loop.

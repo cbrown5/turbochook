@@ -13,6 +13,6 @@ vision_tool(model = "claude-sonnet-5-5")
 An ellmer chat object.
 }
 \description{
-Usually you just pass `vision = TRUE` to [agent()]. Use this to see what
+Usually you just pass `vision = TRUE` to [turbochook()]. Use this to see what
 model is used by default.
 }

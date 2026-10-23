@@ -4,7 +4,7 @@
 # fresh agent (a clean context). The agent's memory between loops is the
 # files on disk, so we ask it to keep notes in a progress file.
 #
-# Each loop is a normal agent() run, with its own step and tool call limits.
+# Each loop is a normal turbochook() run, with its own step and tool call limits.
 # The Ralph loop stops when:
 #   - the agent makes a file called RALPH_DONE (it's sure the job is done), or
 #   - we hit max_loops, or
@@ -32,7 +32,7 @@ memory of earlier runs, except the files in the working folder.
 #' @param progress_file The file agents use to pass notes to the next loop.
 #' @param done_file The file the agent makes when the whole task is done.
 #'   It is deleted before the first loop.
-#' @param ... Passed on to [agent()], e.g. `chat`, `max_steps`, `max_tool_calls`.
+#' @param ... Passed on to [turbochook()], e.g. `chat`, `max_steps`, `max_tool_calls`.
 #' @return Invisibly, a list of the results from each loop.
 #' @export
 ralph <- function(prompt,
@@ -45,7 +45,7 @@ ralph <- function(prompt,
   instructions <- gsub("{done_file}", done_file, instructions, fixed = TRUE)
   full_prompt <- paste0(prompt, instructions)
 
-  # The done file is in the project folder (wd, if given to agent())
+  # The done file is in the project folder (wd, if given to turbochook())
   wd <- list(...)$wd %||% getwd()
   done_path <- file.path(wd, done_file)
   unlink(done_path)
@@ -61,7 +61,7 @@ ralph <- function(prompt,
       line = 2, col = "magenta"
     )
 
-    result <- agent(full_prompt, ...)
+    result <- turbochook(full_prompt, ...)
     results[[loop]] <- result
     if (!is.na(result$cost)) total_cost <- total_cost + result$cost
 

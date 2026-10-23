@@ -37,17 +37,17 @@
 #' @return Invisibly, a list with the summary, status, counts, cost and the
 #'   chat (so you can carry on talking to it).
 #' @export
-agent <- function(task,
-                  chat = ellmer::chat_anthropic(model = "claude-sonnet-5-5"),
-                  tools = list(),
-                  vision = FALSE,
-                  max_steps = 30,
-                  max_tool_calls = 60,
-                  block_internet = TRUE,
-                  timeout = 60,
-                  max_result_chars = 5000,
-                  max_retries = 5,
-                  wd = getwd()) {
+turbochook <- function(task,
+                       chat = ellmer::chat_anthropic(model = "claude-sonnet-5-5"),
+                       tools = list(),
+                       vision = FALSE,
+                       max_steps = 30,
+                       max_tool_calls = 60,
+                       block_internet = TRUE,
+                       timeout = 60,
+                       max_result_chars = 5000,
+                       max_retries = 5,
+                       wd = getwd()) {
   # ---- Set up -------------------------------------------------------------
 
   # Shared state for the tools

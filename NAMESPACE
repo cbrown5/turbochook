@@ -1,4 +1,6 @@
-export(agent)
+export(turbochook)
+export(glm_example_setup)
+export(glm_readme_path)
 export(ralph)
 export(vision_tool)
 export(with_retry)

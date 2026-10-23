@@ -146,7 +146,7 @@ make_vision_tool <- function(ctx, vision_chat) {
 
 #' Make a vision tool for an agent
 #'
-#' Usually you just pass `vision = TRUE` to [agent()]. Use this to see what
+#' Usually you just pass `vision = TRUE` to [turbochook()]. Use this to see what
 #' model is used by default.
 #'
 #' @param model Model name for the vision chat.

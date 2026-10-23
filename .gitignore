@@ -64,6 +64,9 @@
 *.[rR][dD][aA][tT][aA]
 *.[rR][dD][sS]
 
+# ... but the package's own datasets must be committed
+!data/*.[rR][dD][aA]
+
 # Video files
 ##############
 *.[aA][vV][cC][hH][dD]
