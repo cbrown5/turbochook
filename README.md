@@ -45,7 +45,7 @@ API calls go through the `ellmer` package, so any provider and model ellmer supp
 ## Install
 
 ```r
-devtools::install("path/to/turbochook")
+remotes::install_github("cbrown5/turbochook", build_vignettes = TRUE)
 ```
 
 You need an API key for your provider, e.g. `ANTHROPIC_API_KEY` in `~/.Renviron`.
